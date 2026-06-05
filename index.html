@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Hurricane Drill</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --navy: #0d1520;
+  --navy-mid: #111d2e;
+  --navy-card: #162033;
+  --green-btn: #3dbb5a;
+  --green-btn-dark: #2ea048;
+  --green-outline: rgba(61,187,90,0.5);
+  --white: #ffffff;
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255,255,255,0.55);
+  --text-green: #3dbb5a;
+  --text-blue: #4a9fd4;
+  --border: rgba(255,255,255,0.1);
+  --made-color: #3dbb5a;
+  --miss-color: #e03030;
+  --card-bg: rgba(255,255,255,0.97);
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--navy);
+  -webkit-font-smoothing: antialiased;
+}
+
+.screen { display: none; width: 100%; height: 100vh; flex-direction: column; overflow: hidden; position: relative; }
+.screen.active { display: flex; }
+
+/* ── Grass bg (drill screen only) ── */
+.grass-bg { position: absolute; inset: 0; z-index: 0; }
+.grass-bg canvas { width: 100%; height: 100%; display: block; }
+
+/* ══════════════════════════════════════
+   DRILL SCREEN
+══════════════════════════════════════ */
+#screen-drill { background: var(--navy); }
+
+/* Nav row */
+.drill-nav {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 52px 18px 0;
+  flex-shrink: 0;
+}
+.nav-icon-btn {
+  background: none; border: none; cursor: pointer; padding: 6px;
+  color: rgba(255,255,255,0.75); line-height: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Stat card */
+.stat-card {
+  position: relative; z-index: 10;
+  margin: 10px 20px 0;
+  background: var(--card-bg);
+  border-radius: 14px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.stat-col {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 12px 8px 10px; gap: 5px;
+}
+.stat-col + .stat-col { border-left: 1px solid #e8e8e8; }
+.stat-val {
+  font-size: 24px; font-weight: 600; color: #1a1a1a; line-height: 1;
+  min-height: 28px; display: flex; align-items: center;
+}
+.stat-val.dash { color: #aaa; font-size: 26px; font-weight: 300; }
+.stat-val.v-green { color: #2a9a40; font-size: 28px; }
+.stat-lbl {
+  font-size: 10px; font-weight: 500; letter-spacing: 0.08em;
+  text-transform: uppercase; color: #888;
+}
+
+/* Tour fact line */
+.tour-fact {
+  position: relative; z-index: 10;
+  text-align: center; padding: 10px 24px 0;
+  font-size: 13px; font-style: italic;
+  color: rgba(255,255,255,0.6);
+  flex-shrink: 0;
+}
+.tour-fact b { color: rgba(255,255,255,0.85); font-style: normal; }
+
+/* Green area */
+.green-area {
+  flex: 1; position: relative; z-index: 5;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 0; padding: 6px;
+}
+
+/* The stage is a square container for SVG + balls */
+.green-stage {
+  position: relative;
+  /* Fill available space, stay square */
+  width: min(calc(100vw - 32px), calc(100vh - 340px));
+  aspect-ratio: 1;
+  max-width: 360px;
+}
+
+.green-stage svg.hole-svg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none;
+}
+
+/* Ball buttons */
+.ball-btn {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  cursor: pointer; background: none; border: none; padding: 0;
+  z-index: 20;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  -webkit-tap-highlight-color: transparent;
+}
+.ball-sphere {
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.15s cubic-bezier(.34,1.56,.64,1), box-shadow 0.15s;
+  position: relative; overflow: hidden; flex-shrink: 0;
+}
+.ball-btn.pending .ball-sphere {
+  background: radial-gradient(circle at 35% 28%, #ffffff 0%, #ececea 30%, #d4d4cf 62%, #b8b8b2 100%);
+  box-shadow: 1px 3px 8px rgba(0,0,0,0.55), inset -1px -2px 4px rgba(0,0,0,0.12), inset 1px 1px 5px rgba(255,255,255,0.95);
+}
+.ball-btn.pending.is-active .ball-sphere {
+  background: radial-gradient(circle at 35% 28%, #ffffff 0%, #ececea 30%, #d4d4cf 62%, #b8b8b2 100%);
+  box-shadow: 1px 3px 8px rgba(0,0,0,0.55), 0 0 0 3px #fff, 0 0 0 5px var(--green-btn);
+  transform: scale(1.1);
+}
+.ball-btn.made .ball-sphere {
+  background: radial-gradient(circle at 35% 28%, #b8ffcc 0%, #5dd87e 40%, #27a84e 75%, #1a7038 100%);
+  box-shadow: 1px 3px 8px rgba(0,0,0,0.4), 0 0 10px rgba(61,187,90,0.35);
+}
+.ball-btn.missed .ball-sphere {
+  background: radial-gradient(circle at 35% 28%, #ffcccc 0%, #e06060 40%, #c02828 75%, #8a1818 100%);
+  box-shadow: 1px 3px 8px rgba(0,0,0,0.4), 0 0 10px rgba(224,48,48,0.3);
+}
+.ball-btn:active .ball-sphere { transform: scale(0.88); }
+.ball-btn.pending.is-active:active .ball-sphere { transform: scale(0.94); }
+
+.ball-dist-tag {
+  font-size: 9px; font-weight: 600; letter-spacing: 0.02em;
+  color: rgba(255,255,255,0.8);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+  white-space: nowrap; line-height: 1;
+}
+
+/* Bottom panel */
+.bottom-panel {
+  position: relative; z-index: 10;
+  padding: 8px 18px 34px;
+  flex-shrink: 0;
+}
+.putt-info {
+  text-align: center; margin-bottom: 10px;
+}
+.pi-dist { font-size: 15px; font-weight: 500; color: rgba(255,255,255,0.9); }
+.pi-sub { font-size: 12px; color: rgba(255,255,255,0.45); margin-top: 2px; }
+
+.action-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;
+}
+.action-btn {
+  padding: 14px 0; border: none; border-radius: 12px;
+  font-size: 16px; font-weight: 600; font-family: inherit;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px;
+  transition: transform 0.1s, filter 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+.action-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+.action-btn:active { transform: scale(0.95); }
+.action-btn:disabled { opacity: 0.28; pointer-events: none; }
+.btn-made { background: rgba(255,255,255,0.93); color: #1e8038; }
+.btn-missed { background: rgba(255,255,255,0.93); color: #c02020; }
+
+.progress-row {
+  display: flex; justify-content: center; gap: 7px; margin-bottom: 12px;
+}
+.pdot {
+  height: 4px; width: 28px; border-radius: 2px;
+  background: rgba(255,255,255,0.18);
+  transition: background 0.25s, transform 0.2s;
+}
+.pdot.p-made { background: var(--made-color); }
+.pdot.p-miss { background: var(--miss-color); }
+.pdot.p-curr { background: rgba(255,255,255,0.8); transform: scaleY(1.6); }
+
+.finish-btn {
+  width: 100%; padding: 16px; border-radius: 50px; border: none;
+  background: var(--green-btn); color: #fff;
+  font-size: 17px; font-weight: 600; font-family: inherit;
+  cursor: pointer; letter-spacing: 0.01em;
+  transition: background 0.15s, transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.finish-btn:active { transform: scale(0.98); background: var(--green-btn-dark); }
+.finish-btn:disabled { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.3); pointer-events: none; }
+
+/* ══════════════════════════════════════
+   REPORT SCREEN  — dark navy, matches screenshot
+══════════════════════════════════════ */
+#screen-report {
+  background: var(--navy);
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+}
+
+/* Share icon top right */
+.report-topbar {
+  display: flex; justify-content: flex-end; align-items: center;
+  padding: 52px 20px 0; flex-shrink: 0;
+}
+.share-btn {
+  background: none; border: none; cursor: pointer; padding: 6px;
+  color: rgba(255,255,255,0.7); line-height: 0;
+}
+
+/* Report stat card — same white card style */
+.report-stat-card {
+  margin: 12px 20px 0;
+  background: var(--card-bg);
+  border-radius: 14px;
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  overflow: hidden; flex-shrink: 0;
+  border: 1.5px solid rgba(61,187,90,0.4);
+}
+.rsc-col {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 14px 8px 12px; gap: 5px;
+}
+.rsc-col + .rsc-col { border-left: 1px solid #e8e8e8; }
+.rsc-val {
+  font-size: 26px; font-weight: 600; line-height: 1; color: #1a1a1a;
+}
+.rsc-val.v-green { color: #2a9a40; font-size: 30px; }
+.rsc-val.v-blue  { color: #2060b8; }
+.rsc-val.v-ok    { color: #c07800; }
+.rsc-val.v-poor  { color: #c02020; }
+.rsc-lbl {
+  font-size: 10px; font-weight: 500; letter-spacing: 0.08em;
+  text-transform: uppercase; color: #888;
+  display: flex; align-items: center; gap: 4px;
+}
+
+/* Big centred % stat like the "62% Holed" in screenshot */
+.big-stat-area {
+  flex: 0; padding: 28px 20px 20px; text-align: center;
+}
+.big-pct {
+  font-size: 72px; font-weight: 700; color: var(--white); line-height: 1;
+  letter-spacing: -0.02em;
+}
+.big-pct-lbl {
+  font-size: 15px; font-weight: 500; color: rgba(255,255,255,0.6);
+  margin-top: 4px; letter-spacing: 0.02em;
+}
+
+/* Tour comparison fact */
+.report-fact {
+  text-align: center; padding: 0 24px 20px;
+  font-size: 13px; font-style: italic; color: rgba(255,255,255,0.5);
+}
+.report-fact b { color: rgba(255,255,255,0.8); font-style: normal; }
+
+/* Distance breakdown section */
+.section-lbl {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.09em;
+  text-transform: uppercase; color: rgba(255,255,255,0.35);
+  padding: 0 20px 10px;
+}
+
+.bk-list { padding: 0 16px; display: flex; flex-direction: column; gap: 8px; }
+
+.bk-row {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.bk-top {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;
+}
+.bk-left { display: flex; align-items: center; gap: 10px; }
+.bk-dist-num { font-size: 16px; font-weight: 600; color: var(--white); }
+.bk-result-badge {
+  font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.bk-result-badge.made { background: rgba(61,187,90,0.18); color: #4dd870; border: 1px solid rgba(61,187,90,0.3); }
+.bk-result-badge.missed { background: rgba(224,48,48,0.15); color: #f06060; border: 1px solid rgba(224,48,48,0.25); }
+
+.bk-points { font-size: 13px; font-weight: 500; }
+.bk-points.pts-made { color: #4dd870; }
+.bk-points.pts-miss { color: rgba(255,255,255,0.3); }
+
+.bk-tour-line {
+  font-size: 12px; color: rgba(255,255,255,0.45); margin-top: 2px;
+}
+.bk-tour-line b { color: rgba(255,255,255,0.7); }
+
+/* Insight card */
+.insight-wrap { padding: 16px 16px 0; }
+.insight-card {
+  background: rgba(61,187,90,0.08);
+  border: 1px solid rgba(61,187,90,0.25);
+  border-left: 4px solid var(--green-btn);
+  border-radius: 12px; padding: 14px 16px;
+}
+.insight-title { font-size: 13px; font-weight: 600; color: var(--white); margin-bottom: 6px; }
+.insight-body { font-size: 13px; line-height: 1.65; color: rgba(255,255,255,0.65); }
+.insight-body strong { color: var(--white); font-weight: 600; }
+
+/* Bottom buttons — matches Close / Repeat in screenshot */
+.report-btns {
+  padding: 20px 16px 44px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.btn-close {
+  width: 100%; padding: 16px; border-radius: 50px; border: none;
+  background: var(--green-btn); color: #fff;
+  font-size: 17px; font-weight: 600; font-family: inherit;
+  cursor: pointer; transition: background 0.15s, transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-close:active { transform: scale(0.98); background: var(--green-btn-dark); }
+.btn-repeat {
+  width: 100%; padding: 15px; border-radius: 50px;
+  border: 1.5px solid rgba(61,187,90,0.5); background: transparent;
+  color: var(--white);
+  font-size: 17px; font-weight: 600; font-family: inherit;
+  cursor: pointer; transition: background 0.15s, transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-repeat:active { transform: scale(0.98); background: rgba(255,255,255,0.06); }
+
+/* Animations */
+@keyframes ballIn {
+  from { opacity: 0; transform: translate(-50%,-50%) scale(0.4); }
+  65%  { transform: translate(-50%,-50%) scale(1.12); }
+  to   { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+}
+.ball-in { animation: ballIn 0.38s cubic-bezier(.34,1.56,.64,1) both; }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fu { animation: fadeUp 0.3s ease both; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ DRILL SCREEN ══════════════ -->
+<div class="screen active" id="screen-drill">
+  <div class="grass-bg"><canvas id="grass-canvas"></canvas></div>
+
+  <!-- Nav -->
+  <div class="drill-nav">
+    <button class="nav-icon-btn" aria-label="Back">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <button class="nav-icon-btn" aria-label="Help">
+      <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+        <circle cx="13" cy="13" r="12" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/>
+        <text x="13" y="18" text-anchor="middle" font-size="14" fill="rgba(255,255,255,0.75)" font-family="Georgia,serif">?</text>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Stat card -->
+  <div class="stat-card">
+    <div class="stat-col">
+      <div class="stat-val dash" id="hdr-shot">–</div>
+      <div class="stat-lbl">Shot</div>
+    </div>
+    <div class="stat-col">
+      <div class="stat-val v-green" id="hdr-score">–</div>
+      <div class="stat-lbl">Score ▾</div>
+    </div>
+    <div class="stat-col">
+      <div class="stat-val" id="hdr-avg" style="color:#2060b8">0</div>
+      <div class="stat-lbl">Best</div>
+    </div>
+  </div>
+
+  <!-- Tour fact -->
+  <div class="tour-fact" id="tour-fact-drill">
+    Tour players make <b>96%</b> of putts from <b>3 ft</b>, on average
+  </div>
+
+  <!-- Green -->
+  <div class="green-area">
+    <div class="green-stage" id="green-stage">
+      <svg class="hole-svg" viewBox="0 0 320 320" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="hf"><feDropShadow dx="0" dy="2" stdDeviation="5" flood-color="#000" flood-opacity="0.85"/></filter>
+          <radialGradient id="holeGrad" cx="40%" cy="35%" r="65%">
+            <stop offset="0%" stop-color="#181818"/>
+            <stop offset="100%" stop-color="#050505"/>
+          </radialGradient>
+        </defs>
+        <!-- Cup shadow ring -->
+        <circle cx="160" cy="162" r="16" fill="rgba(0,0,0,0.45)" filter="url(#hf)"/>
+        <!-- Hole -->
+        <circle cx="160" cy="160" r="14" fill="url(#holeGrad)"/>
+        <!-- Inner highlight -->
+        <ellipse cx="157" cy="155" rx="5" ry="3" fill="rgba(255,255,255,0.04)"/>
+        <!-- Flag stick -->
+        <line x1="160" y1="146" x2="160" y2="108" stroke="rgba(255,255,255,0.6)" stroke-width="1.3"/>
+        <!-- Flag -->
+        <polygon points="160,108 178,114 160,120" fill="rgba(255,255,255,0.8)"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Bottom panel -->
+  <div class="bottom-panel">
+    <div class="putt-info">
+      <div class="pi-dist" id="pi-dist">Tap a ball to begin</div>
+      <div class="pi-sub" id="pi-sub">6 putts · 3ft → 10ft · 200 pts per hole</div>
+    </div>
+    <div class="action-row">
+      <button class="action-btn btn-made" id="btn-made" onclick="recordPutt(true)" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="8 12 11 15 16 9"/></svg>
+        Made
+      </button>
+      <button class="action-btn btn-missed" id="btn-missed" onclick="recordPutt(false)" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        Missed
+      </button>
+    </div>
+    <div class="progress-row" id="progress-row"></div>
+    <button class="finish-btn" id="finish-btn" onclick="showReport()" disabled>Finish</button>
+  </div>
+</div>
+
+<!-- ══════════════ REPORT SCREEN ══════════════ -->
+<div class="screen" id="screen-report">
+
+  <!-- Share icon -->
+  <div class="report-topbar">
+    <button class="share-btn" aria-label="Share">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+        <polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Stat card: AVG / SCORE / BEST -->
+  <div class="report-stat-card fu" style="animation-delay:0.05s">
+    <div class="rsc-col">
+      <div class="rsc-val" id="r-avg">0</div>
+      <div class="rsc-lbl">Avg</div>
+    </div>
+    <div class="rsc-col">
+      <div class="rsc-val v-green" id="r-score">0</div>
+      <div class="rsc-lbl">Score ▾</div>
+    </div>
+    <div class="rsc-col">
+      <div class="rsc-val v-blue" id="r-best">1200</div>
+      <div class="rsc-lbl">Best</div>
+    </div>
+  </div>
+
+  <!-- Tour fact -->
+  <div class="report-fact fu" id="r-tour-fact" style="animation-delay:0.1s"></div>
+
+  <!-- Big % holed -->
+  <div class="big-stat-area fu" style="animation-delay:0.12s">
+    <div class="big-pct" id="r-big-pct">0%</div>
+    <div class="big-pct-lbl">Holed</div>
+  </div>
+
+  <!-- Breakdown section -->
+  <div class="section-lbl fu" style="animation-delay:0.15s">Distance Breakdown</div>
+  <div class="bk-list fu" id="bk-list" style="animation-delay:0.18s"></div>
+
+  <!-- Insight -->
+  <div class="insight-wrap fu" style="animation-delay:0.22s">
+    <div class="insight-card">
+      <div class="insight-title">Key Insight</div>
+      <div class="insight-body" id="insight-body"></div>
+    </div>
+  </div>
+
+  <!-- Buttons -->
+  <div class="report-btns fu" style="animation-delay:0.26s">
+    <button class="btn-close" onclick="goHome()">Close</button>
+    <button class="btn-repeat" onclick="resetDrill()">Repeat</button>
+  </div>
+
+</div>
+
+<script>
+/* ── Data ── */
+const DISTANCES = [
+  { ft: 3,  tourPct: 96, angle: 90  },
+  { ft: 4,  tourPct: 88, angle: 150 },
+  { ft: 5,  tourPct: 77, angle: 210 },
+  { ft: 6,  tourPct: 65, angle: 270 },
+  { ft: 8,  tourPct: 56, angle: 330 },
+  { ft: 10, tourPct: 40, angle: 30  },
+];
+
+// SVG radii — scaled so outermost ball (~10ft) nearly fills the 320×320 viewBox
+// Hole real diameter ~4.25in, ball ~1.68in
+// Keeping hole at r=14px (realistic), spacing balls proportionally to real distances
+// 3ft→r42, 4ft→r56, 5ft→r70, 6ft→r84, 8ft→r112, 10ft→r138
+const SVG_R = { 3: 42, 4: 56, 5: 70, 6: 84, 8: 112, 10: 138 };
+
+// Ball visual size: golf ball ~1.68in, hole ~4.25in → ball:hole ratio ~0.4
+// Hole is r=14 (diam 28px). Ball should be ~28×0.4 = ~11px radius → 22px diam
+// But we scale up a bit for tap targets — 28px diam at 3ft, scaling down with distance
+const BALL_PX = { 3: 30, 4: 28, 5: 26, 6: 25, 8: 23, 10: 22 };
+
+const POINTS_MADE = 200;
+let results = {};
+let currentBall = null;
+let totalRecorded = 0;
+let sessionBest = parseInt(localStorage.getItem('hd_best') || '1200');
+
+/* ── Grass canvas ── */
+function drawGrass() {
+  const c = document.getElementById('grass-canvas');
+  if (!c) return;
+  c.width = window.innerWidth; c.height = window.innerHeight;
+  const ctx = c.getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, c.width, c.height);
+  g.addColorStop(0, '#3d7d45'); g.addColorStop(0.5, '#2d6535'); g.addColorStop(1, '#1c4422');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, c.width, c.height);
+  const sw = 30;
+  for (let x = 0; x < c.width; x += sw * 2) {
+    ctx.fillStyle = 'rgba(0,0,0,0.045)';
+    ctx.fillRect(x, 0, sw, c.height);
+  }
+  for (let i = 0; i < 5000; i++) {
+    const x = Math.random() * c.width, y = Math.random() * c.height;
+    ctx.strokeStyle = Math.random() > 0.5
+      ? `rgba(255,255,255,${Math.random()*0.055})` : `rgba(0,0,0,${Math.random()*0.055})`;
+    ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + (Math.random()-0.5)*2, y + Math.random()*4 + 1); ctx.stroke();
+  }
+}
+
+/* ── Build balls ── */
+function initBalls() {
+  const stage = document.getElementById('green-stage');
+  stage.querySelectorAll('.ball-btn').forEach(b => b.remove());
+  DISTANCES.forEach((d, i) => {
+    const r = SVG_R[d.ft];
+    const rad = d.angle * Math.PI / 180;
+    const svgX = 160 + r * Math.cos(rad);
+    const svgY = 160 - r * Math.sin(rad);
+    const pctX = (svgX / 320) * 100;
+    const pctY = (svgY / 320) * 100;
+    const sz = BALL_PX[d.ft];
+    const btn = document.createElement('button');
+    btn.className = 'ball-btn pending ball-in';
+    btn.id = 'ball-' + i;
+    btn.style.cssText = `left:${pctX}%;top:${pctY}%;animation-delay:${i*0.06}s`;
+    btn.setAttribute('aria-label', `${d.ft} foot putt`);
+    btn.innerHTML = `
+      <div class="ball-sphere" style="width:${sz}px;height:${sz}px;"></div>
+      <div class="ball-dist-tag">${d.ft}ft</div>`;
+    btn.addEventListener('click', () => selectBall(i));
+    stage.appendChild(btn);
+  });
+  buildDots();
+  setTimeout(() => selectBall(0), 60);
+}
+
+/* ── Progress dots ── */
+function buildDots() {
+  const row = document.getElementById('progress-row');
+  row.innerHTML = '';
+  DISTANCES.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'pdot'; d.id = 'pdot-' + i;
+    row.appendChild(d);
+  });
+}
+function updateDots() {
+  DISTANCES.forEach((_, i) => {
+    const d = document.getElementById('pdot-' + i);
+    if (!d) return;
+    d.className = 'pdot';
+    if (results.hasOwnProperty(i)) d.classList.add(results[i] ? 'p-made' : 'p-miss');
+    else if (i === currentBall) d.classList.add('p-curr');
+  });
+}
+
+/* ── Header ── */
+function updateHeader() {
+  const total = Object.keys(results).length;
+  const made = Object.values(results).filter(Boolean).length;
+  const score = made * POINTS_MADE;
+  const shotEl = document.getElementById('hdr-shot');
+  shotEl.textContent = total > 0 ? total : '–';
+  shotEl.className = total > 0 ? 'stat-val' : 'stat-val dash';
+  document.getElementById('hdr-score').textContent = score > 0 ? score.toLocaleString() : '–';
+  document.getElementById('hdr-avg').textContent = sessionBest.toLocaleString();
+  // Update tour fact for active ball
+  if (currentBall !== null && !results.hasOwnProperty(currentBall)) {
+    const d = DISTANCES[currentBall];
+    document.getElementById('tour-fact-drill').innerHTML =
+      `Tour players make <b>${d.tourPct}%</b> of putts from <b>${d.ft} ft</b>, on average`;
+  }
+}
+
+/* ── Select ball ── */
+function selectBall(idx) {
+  currentBall = idx;
+  const d = DISTANCES[idx];
+  const already = results.hasOwnProperty(idx);
+  DISTANCES.forEach((_, i) => {
+    const btn = document.getElementById('ball-' + i);
+    if (!btn || results.hasOwnProperty(i)) return;
+    btn.classList.toggle('is-active', i === idx);
+  });
+  updateDots();
+  const distEl = document.getElementById('pi-dist');
+  const subEl = document.getElementById('pi-sub');
+  if (already) {
+    distEl.textContent = `${d.ft}ft — ${results[idx] ? '✓ Made (+200)' : '✗ Missed (0 pts)'}`;
+    subEl.textContent = 'Tap another ball';
+    document.getElementById('btn-made').disabled = true;
+    document.getElementById('btn-missed').disabled = true;
+  } else {
+    distEl.textContent = `Putting from ${d.ft} feet`;
+    subEl.textContent = `Tour average: ${d.tourPct}% · 200 pts if holed`;
+    document.getElementById('btn-made').disabled = false;
+    document.getElementById('btn-missed').disabled = false;
+  }
+  updateHeader();
+}
+
+/* ── Record putt ── */
+function recordPutt(made) {
+  if (currentBall === null || results.hasOwnProperty(currentBall)) return;
+  const idx = currentBall;
+  results[idx] = made;
+  totalRecorded++;
+  const btn = document.getElementById('ball-' + idx);
+  btn.classList.remove('pending', 'is-active');
+  btn.classList.add(made ? 'made' : 'missed');
+  btn.querySelector('.ball-sphere').innerHTML = made
+    ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+    : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+  updateDots();
+  updateHeader();
+  if (totalRecorded === 6) {
+    document.getElementById('btn-made').disabled = true;
+    document.getElementById('btn-missed').disabled = true;
+    document.getElementById('finish-btn').disabled = false;
+    document.getElementById('pi-dist').textContent = 'All 6 putts complete';
+    document.getElementById('pi-sub').textContent = 'Tap Finish to see your results';
+    return;
+  }
+  const next = DISTANCES.findIndex((_, i) => !results.hasOwnProperty(i));
+  if (next >= 0) selectBall(next);
+}
+
+/* ── Report ── */
+function showReport() {
+  document.getElementById('screen-drill').classList.remove('active');
+  document.getElementById('screen-report').classList.add('active');
+
+  const totalMade = Object.values(results).filter(Boolean).length;
+  const score = totalMade * POINTS_MADE;
+  const pct = Math.round((totalMade / 6) * 100);
+
+  // Update session best
+  if (score > sessionBest) {
+    sessionBest = score;
+    try { localStorage.setItem('hd_best', score); } catch(e){}
+  }
+
+  // Stat card
+  document.getElementById('r-avg').textContent = pct + '%';
+  const scoreEl = document.getElementById('r-score');
+  scoreEl.textContent = score.toLocaleString();
+  scoreEl.className = 'rsc-val ' + (pct >= 70 ? 'v-green' : pct >= 40 ? 'v-ok' : 'v-poor');
+  document.getElementById('r-best').textContent = sessionBest.toLocaleString();
+
+  // Tour fact — use most interesting distance
+  const misses = DISTANCES.filter((d,i) => !results[i]);
+  const focus = misses.length ? misses[misses.length-1] : DISTANCES[5];
+  document.getElementById('r-tour-fact').innerHTML =
+    `Tour players make <b>${focus.tourPct}%</b> of putts from <b>${focus.ft} ft</b>, on average`;
+
+  // Big %
+  document.getElementById('r-big-pct').textContent = pct + '%';
+
+  // Breakdown rows
+  const list = document.getElementById('bk-list');
+  list.innerHTML = '';
+  DISTANCES.forEach((d, i) => {
+    const made = results[i];
+    const pts = made ? POINTS_MADE : 0;
+    const row = document.createElement('div');
+    row.className = 'bk-row';
+    // Context line: tour average, plain language
+    const tourLine = made
+      ? `Tour avg from ${d.ft}ft: <b>${d.tourPct}%</b> — you matched that today ✓`
+      : `Tour avg from ${d.ft}ft: <b>${d.tourPct}%</b> — keep practising this distance`;
+    row.innerHTML = `
+      <div class="bk-top">
+        <div class="bk-left">
+          <div class="bk-dist-num">${d.ft} feet</div>
+          <div class="bk-result-badge ${made?'made':'missed'}">${made ? 'Holed' : 'Missed'}</div>
+        </div>
+        <div class="bk-points ${made?'pts-made':'pts-miss'}">${made ? '+200 pts' : '0 pts'}</div>
+      </div>
+      <div class="bk-tour-line">${tourLine}</div>`;
+    list.appendChild(row);
+  });
+
+  // Insight
+  const makes = DISTANCES.filter((d,i) => results[i]);
+  const misses2 = DISTANCES.filter((d,i) => !results[i]);
+  const closeMisses = misses2.filter(d => d.ft <= 5);
+  const longMakes = makes.filter(d => d.ft >= 8);
+  let insight = '';
+  if (totalMade === 6) {
+    insight = `<strong>Perfect drill — 1,200 points!</strong> You holed every putt. Tour pros average 77–96% from 3–5ft — you went 100% today. Set this as your benchmark and chase it every session.`;
+  } else if (totalMade === 0) {
+    insight = `Tough session. Focus on <strong>3–5ft first</strong> — these are the highest-value putts. Tour pros hole 77–96% from inside 5ft. Even one or two more in that range will add 400–600 points and massive on-course confidence.`;
+  } else {
+    if (longMakes.length) {
+      insight += `<strong>Great from range:</strong> Holing from ${longMakes.map(d=>d.ft+'ft').join(' and ')} is impressive — tour pros only average ${longMakes.map(d=>d.tourPct+'%').join('/')} there. `;
+    }
+    if (closeMisses.length) {
+      insight += `${insight?'<br><br>':''}<strong>Priority area:</strong> The ${closeMisses.map(d=>d.ft+'ft').join(' & ')} putt${closeMisses.length>1?'s are':' is'} where the most points are available. Tour average is ${closeMisses.map(d=>d.tourPct+'%').join('/')} — dedicate practice time here first.`;
+    } else if (misses2.length) {
+      insight += `${insight?'<br><br>':''}The ${misses2.map(d=>d.ft+'ft').join(' & ')} miss${misses2.length>1?'es':''} ${misses2.length>1?'are':'is'} expected at that range — tour pros only average ${misses2.map(d=>d.tourPct+'%').join('/')}. Keep chasing those extra 200-point holes.`;
+    }
+  }
+  document.getElementById('insight-body').innerHTML = insight;
+}
+
+function goHome() { resetDrill(); }
+
+function resetDrill() {
+  results = {}; currentBall = null; totalRecorded = 0;
+  document.getElementById('screen-report').classList.remove('active');
+  document.getElementById('screen-drill').classList.add('active');
+  document.getElementById('finish-btn').disabled = true;
+  initBalls();
+}
+
+window.addEventListener('load', () => { drawGrass(); initBalls(); });
+window.addEventListener('resize', drawGrass);
+</script>
+</body>
+</html>
